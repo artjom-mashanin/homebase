@@ -335,10 +335,15 @@ Apple Notes-like sidebar navigation:
 | Desktop Shell | Tauri | Lightweight (~10MB), Rust backend, native performance |
 | Frontend | React + TypeScript | Fast development, rich ecosystem |
 | UI Framework | TBD (Tailwind + custom) | Flexibility for custom design |
-| Editor | TipTap or Plate | Rich text editing with markdown support |
+| Editor | TipTap | Rich text editing with markdown support |
 | Local Storage | Markdown files | User owns their data, portable |
-| Index/Search | SQLite | Fast queries, relationships, full-text search |
-| AI | Claude API | Best reasoning for unstructured text |
+| Index/Search (v0.x) | In-memory index (+ optional cached index file) | Ship fast, validate UX; migrate to SQLite/FTS later |
+| AI (later) | Claude API | Best reasoning for unstructured text |
+
+### Repo Tooling
+
+- Package manager: pnpm
+- Workspace: pnpm workspaces (monorepo-friendly for future backend/mobile)
 
 ### Data Architecture
 
@@ -360,10 +365,10 @@ Apple Notes-like sidebar navigation:
 ├── config/
 │   └── settings.json
 └── .homebase/
-    ├── index.db          # SQLite index
-    ├── embeddings.db     # Vector store for semantic search
-    ├── ai-state.json     # AI processing + suggestion queue state
-    └── chat-history.json # Chat session history
+    ├── index.json        # Rebuildable local index cache (v0.x)
+    ├── embeddings.db     # Vector store for semantic search (later)
+    ├── ai-state.json     # AI processing + suggestion queue state (later)
+    └── chat-history.json # Chat session history (later)
 ```
 
 ### Markdown File Format

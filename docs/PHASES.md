@@ -37,6 +37,7 @@ You can take notes and they save locally. Basically a local Apple Notes.
   - React + TypeScript frontend
   - Tailwind CSS for styling
   - Basic app window with sidebar + main content layout
+  - pnpm workspace layout (monorepo-friendly)
 
 - [ ] **Rich text editor**
   - Integrate TipTap or Plate
@@ -59,7 +60,11 @@ You can take notes and they save locally. Basically a local Apple Notes.
   - Auto-save on change (debounced)
 
 - [ ] **File system integration**
-  - Define folder structure: `~/Homebase/notes/inbox/`
+  - Define vault folder structure under a vault root (default: `~/Homebase/`)
+  - Notes folder structure:
+    - `notes/inbox/` (default capture location)
+    - `notes/folders/...` (user-created folders)
+    - `notes/projects/...` (optional project home folders)
   - Save notes as markdown files
   - Load notes from disk on startup
   - Watch for external file changes (optional)
@@ -73,7 +78,10 @@ You can take notes and they save locally. Basically a local Apple Notes.
 - [ ] **Basic settings**
   - Settings panel/modal
   - API key input field (stored securely for Phase 5)
-  - Data directory location (display, maybe configurable later)
+  - Vault directory:
+    - Display current vault path
+    - Change vault path (optional for v0.1; at minimum show it)
+    - Button to reveal/open vault folder in the OS file manager
 
 ### Definition of Done
 Open the app → Create a note → Write content → Add a checklist + link + image → Close app → Reopen → Content round-trips losslessly per the V1 contract.
@@ -87,11 +95,11 @@ You can organize notes into projects and folders, and search across everything.
 
 ### Deliverables
 
-- [ ] **SQLite database setup**
-  - Initialize SQLite database in `.homebase/index.db`
-  - Schema for: notes, projects, folders, topics
-  - Index notes on save (metadata + content for search)
-  - Full-text search index over note content
+- [ ] **In-memory indexing (v0.x)**
+  - Build an in-memory index from markdown files on startup
+  - Update the index on note save/change
+  - Optional: persist a rebuildable cache in `.homebase/index.json` (or similar)
+  - (Planned later) Migrate to SQLite/FTS once UX is validated
 
 - [ ] **Folder structure**
   - Create folders in sidebar
@@ -123,7 +131,7 @@ You can organize notes into projects and folders, and search across everything.
 
 - [ ] **Search**
   - Search input in sidebar or top bar
-  - Full-text search across note content
+  - Fast search across note titles + content (in-memory index)
   - Search results list
   - Click result to open note
   - Highlight search terms (optional)
@@ -208,7 +216,11 @@ Track tasks alongside notes as a full productivity system.
   - Edit task
   - Delete task
   - Change status (quick toggle)
-  - Tasks stored in SQLite (not as files)
+  - Tasks are markdown-backed for exportability:
+    - Embedded tasks live inside notes as task widgets/blocks (still markdown)
+    - Tasks view aggregates tasks by indexing notes
+    - Standalone tasks create a note (or task file) that can optionally link back to a parent note
+  - (Planned later) migrate to SQLite once the model is validated
 
 - [ ] **Tasks view**
   - Dedicated Tasks section in sidebar
@@ -429,11 +441,11 @@ Open chat → Ask "What do I know about [topic]?" → Get answer with sources �
 ```
 Phase 1 (Core)
     ↓
-Phase 2 (Organization) ← requires SQLite from here
+Phase 2 (Organization) ← in-memory index for v0.x
     ↓
 Phase 3 (Timeline) ← requires projects from Phase 2
     ↓
-Phase 4 (Tasks) ← requires SQLite, projects
+Phase 4 (Tasks) ← requires projects + indexing
     ↓
 Phase 5 (AI Org) ← requires notes, projects, topics
     ↓
@@ -447,7 +459,7 @@ Phase 6 (Chat) ← requires embeddings, all content indexed
 | Editor | TipTap | Plate, Lexical, ProseMirror |
 | State Management | Zustand | Redux, Jotai |
 | Styling | Tailwind CSS | CSS Modules, Styled Components |
-| SQLite Binding | sql.js or better-sqlite3 via Tauri | Prisma (heavier) |
+| Search (v0.x) | In-memory index | SQLite FTS (later) |
 | Embeddings | OpenAI text-embedding-3-small | Voyage, local model |
 | Vector Search | SQLite with vec extension | Separate vector DB |
 
