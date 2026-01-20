@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PanelHeader } from "@/components/ui/panel-header";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -227,7 +228,6 @@ export function Sidebar() {
   const vaultPath = useHomebaseStore((s) => s.vaultPath);
   const collection = useHomebaseStore((s) => s.collection);
   const setCollection = useHomebaseStore((s) => s.setCollection);
-  const createNote = useHomebaseStore((s) => s.createNote);
   const searchQuery = useHomebaseStore((s) => s.searchQuery);
   const setSearchQuery = useHomebaseStore((s) => s.setSearchQuery);
   const folders = useHomebaseStore((s) => s.folders);
@@ -260,9 +260,9 @@ export function Sidebar() {
   } | null>(null);
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r border-border bg-sidebar">
+    <aside className="flex h-full min-h-0 w-64 flex-col border-r border-border bg-sidebar">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-3">
+      <PanelHeader>
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-semibold leading-none">
             <div className="flex size-5 items-center justify-center rounded bg-primary text-[10px] font-bold text-primary-foreground">
@@ -284,15 +284,10 @@ export function Sidebar() {
           <FolderOpen className="size-3.5" />
           Open
         </Button>
-      </div>
+      </PanelHeader>
 
-      {/* Actions */}
-      <div className="p-3 space-y-3">
-        <Button onClick={() => createNote()} className="w-full">
-          <Plus className="size-4" />
-          New note
-        </Button>
-
+      {/* Search */}
+      <div className="p-3">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -329,7 +324,7 @@ export function Sidebar() {
       </div>
 
       {/* Folders & Projects */}
-      <div className="flex-1 overflow-auto px-3 pb-3">
+      <div className="flex-1 min-h-0 overflow-auto px-3 pb-3">
         {/* Folders Section */}
         <div className="mt-4">
           <div className="flex items-center justify-between">

@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { PanelHeader } from "@/components/ui/panel-header";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -50,12 +51,14 @@ export function MetadataPanel({
   projects,
   onUpdateMeta,
   onMove,
+  className,
 }: {
   note: Note;
   folders: string[];
   projects: Project[];
   onUpdateMeta: (patch: { projects?: string[]; topics?: string[] }) => void;
   onMove: (targetDir: string) => void;
+  className?: string;
 }) {
   const moveOptions = useMemo(() => {
     const folderOptions = foldersToOptions(folders);
@@ -93,14 +96,19 @@ export function MetadataPanel({
   const unassignedProjects = projects.filter((p) => !note.projects.includes(p.id));
 
   return (
-    <aside className="flex h-full w-72 flex-col border-l border-border bg-background">
+    <aside
+      className={cn(
+        "flex h-full min-h-0 w-72 flex-col border-l border-border bg-background",
+        className
+      )}
+    >
       {/* Header */}
-      <div className="border-b border-border px-4 py-3">
-        <div className="text-sm font-semibold leading-none">Details</div>
-      </div>
+      <PanelHeader>
+        <div className="text-sm font-semibold">Details</div>
+      </PanelHeader>
 
       {/* Content */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="p-4 space-y-5">
           {/* Location */}
           <div>

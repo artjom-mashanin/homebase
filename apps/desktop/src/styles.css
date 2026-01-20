@@ -82,14 +82,63 @@
   body,
   #root {
     height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overflow-hidden;
   }
 }
 
 @layer components {
+  /* Override Tailwind Typography prose colors to use theme variables */
+  .prose {
+    --tw-prose-body: hsl(var(--foreground));
+    --tw-prose-headings: hsl(var(--foreground));
+    --tw-prose-links: hsl(var(--primary));
+    --tw-prose-bold: hsl(var(--foreground));
+    --tw-prose-counters: hsl(var(--muted-foreground));
+    --tw-prose-bullets: hsl(var(--muted-foreground));
+    --tw-prose-hr: hsl(var(--border));
+    --tw-prose-quotes: hsl(var(--foreground));
+    --tw-prose-quote-borders: hsl(var(--border));
+    --tw-prose-code: hsl(var(--foreground));
+    --tw-prose-pre-code: hsl(var(--foreground));
+    --tw-prose-pre-bg: hsl(var(--muted));
+  }
+
+  /* Override prose styles for task lists */
+  .prose ul[data-type="taskList"] {
+    list-style: none !important;
+    padding-left: 0 !important;
+    margin: 0.5rem 0;
+  }
+
+  .prose ul[data-type="taskList"] li {
+    display: flex !important;
+    gap: 0.5rem;
+    align-items: flex-start;
+    padding-left: 0 !important;
+    margin: 0 !important;
+  }
+
+  .prose ul[data-type="taskList"] li::before,
+  .prose ul[data-type="taskList"] li::marker {
+    content: none !important;
+  }
+
+  .prose ul[data-type="taskList"] li > label {
+    margin-top: 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .prose ul[data-type="taskList"] li > div {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Keep ProseMirror-specific selectors for editor compatibility */
   .ProseMirror ul[data-type="taskList"] {
     list-style: none;
     padding-left: 0;

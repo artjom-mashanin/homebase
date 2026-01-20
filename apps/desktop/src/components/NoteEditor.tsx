@@ -1,4 +1,5 @@
 import { EditorContent, useEditor } from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import TaskItem from "@tiptap/extension-task-item";
@@ -15,11 +16,12 @@ import {
   ListOrdered,
   CheckSquare,
   Link2,
-  Check,
+  PanelRightOpen,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { PanelHeader } from "@/components/ui/panel-header";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -55,7 +57,7 @@ export function NoteEditor() {
   }, [draftNote, notes, selectedNoteId]);
 
   const [draft, setDraft] = useState(note?.note.body ?? "");
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
+  const [showMetadata, setShowMetadata] = useState(false);
 
   useEffect(() => setDraft(note?.note.body ?? ""), [note?.note.id]);
 
@@ -79,7 +81,7 @@ export function NoteEditor() {
     editorProps: {
       attributes: {
         class:
-          "prose prose-invert max-w-none focus:outline-none prose-headings:font-semibold prose-a:text-primary prose-code:text-foreground",
+          "prose max-w-none focus:outline-none prose-headings:font-semibold prose-a:text-primary prose-code:text-foreground",
       },
     },
     onUpdate: ({ editor }) => {
@@ -95,19 +97,17 @@ export function NoteEditor() {
       return;
     }
     editor.commands.setContent(note.note.body);
-    editor.commands.focus("end");
+    editor.commands.focus("end", { scrollIntoView: false });
   }, [editor, note?.note.id]);
 
   useEffect(() => {
     if (!note) return;
-    setSaveStatus("saving");
     const handle = window.setTimeout(() => {
       if (note.type === "draft") {
         saveDraftBody(draft);
       } else {
         void saveNoteBody(note.note.id, draft);
       }
-      setSaveStatus("saved");
     }, 500);
     return () => window.clearTimeout(handle);
   }, [draft, note?.note.id, note?.type, saveDraftBody, saveNoteBody]);
@@ -124,45 +124,63 @@ export function NoteEditor() {
     note.type === "draft" ? "Not saved" : formatRelativeDateTime(note.note.modified);
 
   return (
-    <section className="flex h-full flex-1 bg-background">
-      <div className="flex h-full flex-1 flex-col">
+    <section className="flex h-full min-h-0 flex-1 bg-background">
+      <div className="flex h-full min-h-0 flex-1 flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <PanelHeader className="gap-3">
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold">{note.note.title || "New note"}</div>
-            <div className="mt-0.5 text-xs text-muted-foreground">{formattedDate}</div>
+            <div className="mt-0.5 truncate text-xs text-muted-foreground">{formattedDate}</div>
           </div>
           <div className="flex items-center gap-2">
             <EditorToolbar editor={editor} />
-            <Separator orientation="vertical" className="h-6" />
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              {saveStatus === "saving" ? (
-                "Saving..."
-              ) : (
-                <>
-                  <Check className="size-3.5 text-green-500" />
-                  Saved
-                </>
-              )}
-            </div>
+            {note.type === "persisted" && (
+              <>
+                <Separator orientation="vertical" className="h-6" />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setShowMetadata(!showMetadata)}
+                      className={cn("size-8", showMetadata && "bg-accent")}
+                    >
+                      <PanelRightOpen className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {showMetadata ? "Hide metadata" : "Show metadata"}
+                  </TooltipContent>
+                </Tooltip>
+              </>
+            )}
           </div>
-        </div>
+        </PanelHeader>
 
         {/* Editor */}
-        <div className="flex-1 overflow-auto px-6 py-6">
+        <div className="flex-1 min-h-0 overflow-auto px-6 py-6">
           <EditorContent editor={editor} />
+          <FloatingToolbar editor={editor} />
         </div>
       </div>
 
-      {note.type === "persisted" ? (
-        <MetadataPanel
-          note={note.note}
-          folders={folders}
-          projects={projects}
-          onUpdateMeta={(patch) => void updateNoteMeta(note.note.id, patch)}
-          onMove={(targetDir) => void moveNote(note.note.id, targetDir)}
-        />
-      ) : null}
+      <div
+        className={cn(
+          "min-h-0 overflow-hidden transition-all duration-200 ease-out",
+          showMetadata ? "w-72" : "w-0"
+        )}
+      >
+        {note.type === "persisted" && (
+          <MetadataPanel
+            note={note.note}
+            folders={folders}
+            projects={projects}
+            onUpdateMeta={(patch) => void updateNoteMeta(note.note.id, patch)}
+            onMove={(targetDir) => void moveNote(note.note.id, targetDir)}
+            className="w-72"
+          />
+        )}
+      </div>
     </section>
   );
 }
@@ -203,6 +221,103 @@ function ToolbarButton({
         {shortcut && <span className="ml-1.5 text-muted-foreground">({shortcut})</span>}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+function FloatingToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkValue, setLinkValue] = useState("");
+
+  if (!editor) return null;
+
+  const openLinkDialog = () => {
+    const previousUrl = editor.getAttributes("link").href as string | undefined;
+    setLinkValue(previousUrl ?? "");
+    setLinkDialogOpen(true);
+  };
+
+  const handleLinkSubmit = () => {
+    setLinkDialogOpen(false);
+    if (!linkValue) {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      return;
+    }
+    editor.chain().focus().extendMarkRange("link").setLink({ href: linkValue }).run();
+  };
+
+  return (
+    <>
+      <BubbleMenu
+        editor={editor}
+        options={{ placement: "top", offset: 8 }}
+        className="flex items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-md"
+      >
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => editor.chain().focus().toggleBold().run()}
+          className={cn("size-7", editor.isActive("bold") && "bg-accent text-accent-foreground")}
+        >
+          <Bold className="size-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+          className={cn("size-7", editor.isActive("italic") && "bg-accent text-accent-foreground")}
+        >
+          <Italic className="size-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => editor.chain().focus().toggleStrike().run()}
+          className={cn("size-7", editor.isActive("strike") && "bg-accent text-accent-foreground")}
+        >
+          <Strikethrough className="size-3.5" />
+        </Button>
+        <Separator orientation="vertical" className="mx-0.5 h-5" />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={openLinkDialog}
+          className={cn("size-7", editor.isActive("link") && "bg-accent text-accent-foreground")}
+        >
+          <Link2 className="size-3.5" />
+        </Button>
+      </BubbleMenu>
+
+      <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Insert Link</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              autoFocus
+              value={linkValue}
+              onChange={(e) => setLinkValue(e.target.value)}
+              placeholder="https://example.com"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleLinkSubmit();
+                }
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave empty to remove the link.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleLinkSubmit}>Apply</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

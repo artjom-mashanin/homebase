@@ -6,6 +6,7 @@ import { Sidebar } from "./components/Sidebar";
 import { NoteList } from "./components/NoteList";
 import { NoteEditor } from "./components/NoteEditor";
 import { useHomebaseStore } from "./store/useHomebaseStore";
+import { formatRelativeDate, extractSnippet } from "./lib/dates";
 
 function App() {
   const init = useHomebaseStore((s) => s.init);
@@ -25,9 +26,15 @@ function App() {
   );
 
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
-  const activeNoteTitle = useMemo(() => {
+  const activeNote = useMemo(() => {
     if (!activeNoteId) return null;
-    return notes.find((n) => n.id === activeNoteId)?.title || "New note";
+    const note = notes.find((n) => n.id === activeNoteId);
+    if (!note) return null;
+    return {
+      title: note.title || "New note",
+      snippet: extractSnippet(note.body, 80),
+      date: formatRelativeDate(note.modified),
+    };
   }, [activeNoteId, notes]);
 
   const onDragStart = useCallback((event: DragStartEvent) => {
@@ -86,7 +93,7 @@ function App() {
   }, [init]);
 
   return (
-    <div className="h-full">
+    <div className="h-full min-h-0 overflow-hidden">
       {isBooting ? (
         <div className="flex h-full items-center justify-center text-sm text-neutral-500">
           Initializing vault…
@@ -98,16 +105,22 @@ function App() {
           onDragEnd={onDragEnd}
           onDragCancel={onDragCancel}
         >
-          <div className="flex h-full">
+          <div className="flex h-full min-h-0 min-w-0 overflow-hidden">
             <Sidebar />
             <NoteList />
             <NoteEditor />
           </div>
 
           <DragOverlay>
-            {activeNoteTitle ? (
-              <div className="rounded border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 shadow-lg">
-                {activeNoteTitle}
+            {activeNote ? (
+              <div className="w-72 rounded-lg border border-primary/50 bg-card p-3 shadow-xl">
+                <h3 className="truncate text-sm font-medium">{activeNote.title}</h3>
+                {activeNote.snippet && (
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                    {activeNote.snippet}
+                  </p>
+                )}
+                <div className="mt-2 text-xs text-muted-foreground">{activeNote.date}</div>
               </div>
             ) : null}
           </DragOverlay>

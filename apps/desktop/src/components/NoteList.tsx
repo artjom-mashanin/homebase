@@ -1,10 +1,12 @@
 import { useMemo, type CSSProperties } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { Inbox, FileText, Archive as ArchiveIcon, Folder, Target, Archive } from "lucide-react";
+import { Inbox, FileText, Archive as ArchiveIcon, Folder, Target, Archive, Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { PanelHeader } from "@/components/ui/panel-header";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { normalizeStringForSearch } from "../lib/markdown";
 import { formatRelativeDate, extractSnippet } from "../lib/dates";
@@ -56,6 +58,7 @@ export function NoteList() {
   const selectedNoteId = useHomebaseStore((s) => s.selectedNoteId);
   const selectNote = useHomebaseStore((s) => s.selectNote);
   const archiveNote = useHomebaseStore((s) => s.archiveNote);
+  const createNote = useHomebaseStore((s) => s.createNote);
   const collection = useHomebaseStore((s) => s.collection);
   const searchQuery = useHomebaseStore((s) => s.searchQuery);
   const projects = useHomebaseStore((s) => s.projects);
@@ -103,20 +106,33 @@ export function NoteList() {
   );
 
   return (
-    <section className="flex h-full w-80 flex-col border-r border-border bg-background">
+    <section className="flex h-full min-h-0 w-80 flex-col border-r border-border bg-background">
       {/* Header */}
-      <div className="border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2 text-sm font-semibold leading-none">
-          <CollectionIcon className="size-4 text-muted-foreground" />
-          {collectionLabel}
+      <PanelHeader>
+        <div>
+          <div className="flex items-center gap-2 text-sm font-semibold leading-none">
+            <CollectionIcon className="size-4 text-muted-foreground" />
+            {collectionLabel}
+          </div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            {visibleNotes.length} {visibleNotes.length === 1 ? "note" : "notes"}
+          </div>
         </div>
-        <div className="mt-1 text-xs text-muted-foreground">
-          {visibleNotes.length} {visibleNotes.length === 1 ? "note" : "notes"}
-        </div>
-      </div>
+        {collection.type !== "archive" && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="size-7"
+            onClick={() => createNote()}
+            title="New note"
+          >
+            <Plus className="size-4" />
+          </Button>
+        )}
+      </PanelHeader>
 
       {/* Notes List */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         {visibleNotes.length === 0 && !showDraft ? (
           <div className="p-4 text-sm text-muted-foreground">No notes.</div>
         ) : (
@@ -268,7 +284,10 @@ function DraggableNoteCard({
       style={style}
       {...attributes}
       {...listeners}
-      className={cn(isDragging && "opacity-50")}
+      className={cn(
+        "cursor-grab active:cursor-grabbing",
+        isDragging && "opacity-50 ring-2 ring-primary/30"
+      )}
     >
       <NoteCard
         title={note.title || "Untitled"}
