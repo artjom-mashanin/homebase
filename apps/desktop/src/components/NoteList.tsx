@@ -1,10 +1,14 @@
-import clsx from "clsx";
 import { useMemo, type CSSProperties } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import { Inbox, FileText, Archive as ArchiveIcon, Folder, Target, Archive } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { normalizeStringForSearch } from "../lib/markdown";
-import type { Note, Project } from "../lib/types";
+import { formatRelativeDate, extractSnippet } from "../lib/dates";
+import type { Note, Project, Collection } from "../lib/types";
 import { useHomebaseStore } from "../store/useHomebaseStore";
 
 function noteMatchesFolder(note: Note, folderRelativePath: string): boolean {
@@ -18,6 +22,32 @@ function noteMatchesProject(note: Note, project: Project): boolean {
     ? project.folderRelativePath
     : `${project.folderRelativePath}/`;
   return note.relativePath.startsWith(prefix);
+}
+
+function getCollectionDisplay(collection: Collection, projects: Project[]): {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+} {
+  switch (collection.type) {
+    case "inbox":
+      return { icon: Inbox, label: "Inbox" };
+    case "all":
+      return { icon: FileText, label: "All notes" };
+    case "archive":
+      return { icon: ArchiveIcon, label: "Archive" };
+    case "folder": {
+      const folderName = collection.folderRelativePath.split("/").pop() || "Folder";
+      return { icon: Folder, label: folderName };
+    }
+    case "project": {
+      const project = projects.find((p) => p.id === collection.projectId);
+      return { icon: Target, label: project?.name || "Project" };
+    }
+    case "search":
+      return { icon: FileText, label: "Search results" };
+    default:
+      return { icon: FileText, label: "Notes" };
+  }
 }
 
 export function NoteList() {
@@ -67,51 +97,46 @@ export function NoteList() {
     return false;
   }, [collection, draftNote, projects]);
 
+  const { icon: CollectionIcon, label: collectionLabel } = getCollectionDisplay(
+    collection,
+    projects
+  );
+
   return (
-    <section className="flex h-full w-80 flex-col border-r border-neutral-800 bg-neutral-950">
-      <div className="border-b border-neutral-800 px-3 py-3">
-        <div className="text-sm font-semibold leading-none">
-          {collection.type === "inbox"
-            ? "Inbox"
-            : collection.type === "all"
-              ? "All notes"
-              : collection.type === "folder"
-                ? `Folder`
-                : collection.type === "project"
-                  ? "Project"
-                  : collection.type === "archive"
-                    ? "Archive"
-                    : "Search"}
+    <section className="flex h-full w-80 flex-col border-r border-border bg-background">
+      {/* Header */}
+      <div className="border-b border-border px-4 py-3">
+        <div className="flex items-center gap-2 text-sm font-semibold leading-none">
+          <CollectionIcon className="size-4 text-muted-foreground" />
+          {collectionLabel}
         </div>
-        <div className="mt-1 text-xs text-neutral-500">{visibleNotes.length} notes</div>
+        <div className="mt-1 text-xs text-muted-foreground">
+          {visibleNotes.length} {visibleNotes.length === 1 ? "note" : "notes"}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-auto">
+      {/* Notes List */}
+      <ScrollArea className="flex-1">
         {visibleNotes.length === 0 && !showDraft ? (
-          <div className="p-3 text-sm text-neutral-500">No notes.</div>
+          <div className="p-4 text-sm text-muted-foreground">No notes.</div>
         ) : (
-          <ul className="divide-y divide-neutral-900">
+          <div className="p-2 space-y-1">
             {showDraft && draftNote ? (
-              <li key={draftNote.id}>
-                <button
-                  type="button"
-                  onClick={() => selectNote(draftNote.id)}
-                  className={clsx(
-                    "group flex w-full items-start gap-3 px-3 py-3 text-left",
-                    draftNote.id === selectedNoteId ? "bg-neutral-900" : "hover:bg-neutral-900/60",
-                  )}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-neutral-100">
-                      {draftNote.title || "New note"}
-                    </div>
-                    <div className="mt-1 truncate text-xs text-neutral-500">Not saved</div>
-                  </div>
-                </button>
-              </li>
+              <NoteCard
+                key={draftNote.id}
+                title={draftNote.title || "New note"}
+                snippet=""
+                date="Not saved"
+                projectBadges={[]}
+                selected={draftNote.id === selectedNoteId}
+                isArchived={false}
+                isDraft
+                onClick={() => selectNote(draftNote.id)}
+                onArchive={() => {}}
+              />
             ) : null}
             {visibleNotes.map((note) => (
-              <DraggableNoteRow
+              <DraggableNoteCard
                 key={note.id}
                 note={note}
                 selected={note.id === selectedNoteId}
@@ -120,14 +145,92 @@ export function NoteList() {
                 onArchive={(id) => void archiveNote(id)}
               />
             ))}
-          </ul>
+          </div>
         )}
-      </div>
+      </ScrollArea>
     </section>
   );
 }
 
-function DraggableNoteRow({
+function NoteCard({
+  title,
+  snippet,
+  date,
+  projectBadges,
+  selected,
+  isArchived,
+  isDraft,
+  onClick,
+  onArchive,
+}: {
+  title: string;
+  snippet: string;
+  date: string;
+  projectBadges: { id: string; name: string }[];
+  selected: boolean;
+  isArchived: boolean;
+  isDraft?: boolean;
+  onClick: () => void;
+  onArchive: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "group relative w-full rounded-lg border p-3 text-left transition-all",
+        selected
+          ? "border-primary/50 bg-accent shadow-sm"
+          : "border-transparent hover:border-border hover:bg-accent/50",
+      )}
+    >
+      {/* Title */}
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="truncate text-sm font-medium text-foreground">{title}</h3>
+        {!isArchived && !isDraft && (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onArchive();
+            }}
+            className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity rounded p-1 hover:bg-muted"
+            title="Archive"
+          >
+            <Archive className="size-3.5 text-muted-foreground" />
+          </button>
+        )}
+      </div>
+
+      {/* Snippet */}
+      {snippet && (
+        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{snippet}</p>
+      )}
+
+      {/* Footer: Date + Project Badges */}
+      <div className="mt-2 flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-muted-foreground">{date}</span>
+        {projectBadges.length > 0 && (
+          <div className="flex gap-1 flex-wrap">
+            {projectBadges.slice(0, 2).map((p) => (
+              <Badge key={p.id} variant="secondary" className="text-[10px] px-1.5 py-0">
+                {p.name}
+              </Badge>
+            ))}
+            {projectBadges.length > 2 && (
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                +{projectBadges.length - 2}
+              </Badge>
+            )}
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function DraggableNoteCard({
   note,
   selected,
   projects,
@@ -149,70 +252,34 @@ function DraggableNoteRow({
     touchAction: "none",
   };
 
-  return (
-    <li>
-      <div
-        ref={setNodeRef}
-        style={style}
-        {...attributes}
-        {...listeners}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onSelect(note.id);
-          }
-        }}
-        onClick={() => onSelect(note.id)}
-        className={clsx(
-          "group flex w-full cursor-pointer select-none items-start gap-3 px-3 py-3 text-left",
-          selected ? "bg-neutral-900" : "hover:bg-neutral-900/60",
-          isDragging ? "opacity-60" : null,
-        )}
-      >
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-neutral-100">
-            {note.title || "New note"}
-          </div>
-          <div className="mt-1 truncate text-xs text-neutral-500">{note.relativePath}</div>
-          {note.projects.length > 0 ? (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {note.projects.slice(0, 3).map((pid) => {
-                const p = projects.find((x) => x.id === pid);
-                return (
-                  <span
-                    key={pid}
-                    className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-200"
-                  >
-                    {p?.name ?? "Project"}
-                  </span>
-                );
-              })}
-              {note.projects.length > 3 ? (
-                <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-200">
-                  +{note.projects.length - 3}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
+  const projectBadges = note.projects
+    .map((pid) => {
+      const p = projects.find((x) => x.id === pid);
+      return p ? { id: p.id, name: p.name } : null;
+    })
+    .filter((p): p is { id: string; name: string } => p !== null);
 
-        {note.kind !== "archive" ? (
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onArchive(note.id);
-            }}
-            className="invisible rounded px-2 py-1 text-xs text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100 group-hover:visible"
-            title="Archive"
-          >
-            Archive
-          </button>
-        ) : null}
-      </div>
-    </li>
+  const snippet = extractSnippet(note.body, 80);
+  const relativeDate = formatRelativeDate(note.modified);
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={cn(isDragging && "opacity-50")}
+    >
+      <NoteCard
+        title={note.title || "Untitled"}
+        snippet={snippet}
+        date={relativeDate}
+        projectBadges={projectBadges}
+        selected={selected}
+        isArchived={note.kind === "archive"}
+        onClick={() => onSelect(note.id)}
+        onArchive={() => onArchive(note.id)}
+      />
+    </div>
   );
 }
