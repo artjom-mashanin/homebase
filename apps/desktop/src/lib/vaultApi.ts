@@ -5,7 +5,7 @@ export type VaultInfo = {
   version: number;
 };
 
-export type VaultNoteKind = "inbox" | "folder" | "project" | "archive" | "other";
+export type VaultNoteKind = "inbox" | "daily" | "folder" | "project" | "archive" | "other";
 
 export type VaultNoteEntry = {
   relativePath: string;
@@ -71,6 +71,13 @@ export async function vaultCreateNoteFromMarkdown(opts: {
   contents: string;
 }): Promise<string> {
   return await invoke("vault_create_note_from_markdown", { args: opts });
+}
+
+export async function vaultCreateDailyNote(opts: {
+  date: string;
+  contents?: string;
+}): Promise<string> {
+  return await invoke("vault_create_daily_note", { args: opts });
 }
 
 export async function vaultArchiveNote(relativePath: string): Promise<string> {

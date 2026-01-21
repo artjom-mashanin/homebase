@@ -11,6 +11,7 @@ pub fn run() {
             vault::vault_create_note,
             vault::vault_create_note_from_markdown,
             vault::vault_create_note_in_inbox,
+            vault::vault_create_daily_note,
             vault::vault_write_note,
             vault::vault_archive_note,
             vault::vault_move_note,

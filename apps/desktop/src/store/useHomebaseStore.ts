@@ -3,6 +3,7 @@ import { create } from "zustand";
 import {
   vaultArchiveNote,
   vaultCreateFolder,
+  vaultCreateDailyNote,
   vaultCreateNoteFromMarkdown,
   vaultCreateProject,
   vaultDeleteFolder,
@@ -27,6 +28,12 @@ import {
   stringifyNoteFile,
 } from "../lib/markdown";
 import type { Collection, DraftNote, Note, NoteId, Project } from "../lib/types";
+import {
+  buildTaskLine,
+  toggleTaskStatusWithRecurrence,
+  updateTaskMetadata,
+  updateTaskTitle,
+} from "../lib/tasks";
 
 type UpdateNoteMetaPatch = {
   projects?: string[];
@@ -54,12 +61,33 @@ type HomebaseState = {
   clearError: () => void;
 
   selectNote: (noteId: NoteId) => void;
-  createNote: () => void;
+  createNote: () => NoteId;
   saveNoteBody: (noteId: NoteId, body: string) => Promise<void>;
   saveDraftBody: (body: string) => void;
   updateNoteMeta: (noteId: NoteId, patch: UpdateNoteMetaPatch) => Promise<void>;
   archiveNote: (noteId: NoteId) => Promise<void>;
   moveNote: (noteId: NoteId, targetDir: string) => Promise<void>;
+  saveDailyBody: (dateKey: string, body: string) => Promise<void>;
+  toggleTaskStatus: (noteId: NoteId, taskId: string, status: "todo" | "done") => Promise<void>;
+  updateTaskMeta: (
+    noteId: NoteId,
+    taskId: string,
+    patch: {
+      due?: string | null;
+      priority?: "low" | "medium" | "high" | "urgent" | null;
+      every?: "daily" | "weekly" | "monthly" | null;
+      order?: number | null;
+    },
+  ) => Promise<void>;
+  updateTaskTitle: (noteId: NoteId, taskId: string, title: string) => Promise<void>;
+  updateTaskOrderBatch: (items: { noteId: NoteId; taskId: string; order: number }[]) => Promise<void>;
+  createTaskNote: (args: {
+    title: string;
+    due?: string | null;
+    priority?: "low" | "medium" | "high" | "urgent" | null;
+    every?: "daily" | "weekly" | "monthly" | null;
+    projectId?: string | null;
+  }) => Promise<void>;
 
   createFolder: (relativePath: string) => Promise<void>;
   renameFolder: (fromRelativePath: string, toName: string) => Promise<void>;
@@ -82,6 +110,7 @@ function coerceIsoString(value: unknown): string | null {
 
 function noteKindFromRelativePath(relativePath: string): Note["kind"] {
   if (relativePath.startsWith("notes/inbox/")) return "inbox";
+  if (relativePath.startsWith("notes/daily/")) return "daily";
   if (relativePath.startsWith("notes/archive/")) return "archive";
   if (relativePath.startsWith("notes/projects/")) return "project";
   if (relativePath.startsWith("notes/folders/")) return "folder";
@@ -90,6 +119,7 @@ function noteKindFromRelativePath(relativePath: string): Note["kind"] {
 
 function noteKindFromTargetDir(targetDir: string): DraftNote["kind"] {
   if (targetDir.startsWith("notes/inbox")) return "inbox";
+  if (targetDir.startsWith("notes/daily")) return "daily";
   if (targetDir.startsWith("notes/projects")) return "project";
   if (targetDir.startsWith("notes/folders")) return "folder";
   return "other";
@@ -135,7 +165,7 @@ export const useHomebaseStore = create<HomebaseState>((set, get) => ({
   folders: [],
   projects: [],
   selectedNoteId: null,
-  collection: { type: "inbox" },
+  collection: { type: "daily" },
   searchQuery: "",
   lastError: null,
 
@@ -195,7 +225,11 @@ export const useHomebaseStore = create<HomebaseState>((set, get) => ({
     const trimmed = value.trimStart();
     set({
       searchQuery: trimmed,
-      collection: trimmed ? { type: "search" } : get().collection.type === "search" ? { type: "inbox" } : get().collection,
+      collection: trimmed
+        ? { type: "search" }
+        : get().collection.type === "search"
+          ? { type: "daily" }
+          : get().collection,
     });
   },
 
@@ -220,12 +254,15 @@ export const useHomebaseStore = create<HomebaseState>((set, get) => ({
       const project = projects.find((p) => p.id === currentCollection.projectId);
       if (project) targetDir = project.folderRelativePath;
     }
+    if (currentCollection.type === "daily" || currentCollection.type === "tasks") {
+      targetDir = "notes/inbox";
+    }
 
     const existingDraft = get().draftNote;
     if (existingDraft) {
       if (isMeaningfulBody(existingDraft.body) || existingDraft.isPersisting) {
         set({ selectedNoteId: existingDraft.id });
-        return;
+        return existingDraft.id;
       }
       set({ draftNote: null });
     }
@@ -248,6 +285,7 @@ export const useHomebaseStore = create<HomebaseState>((set, get) => ({
     };
 
     set({ draftNote: draft, selectedNoteId: id, searchQuery: "" });
+    return id;
   },
 
   saveNoteBody: async (noteId, body) => {
@@ -462,6 +500,130 @@ export const useHomebaseStore = create<HomebaseState>((set, get) => ({
       if (shouldUserPlace !== note.userPlaced) {
         await get().updateNoteMeta(noteId, { userPlaced: shouldUserPlace });
       }
+    } catch (err) {
+      set({ lastError: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  saveDailyBody: async (dateKey, body) => {
+    const relPath = `notes/daily/${dateKey}.md`;
+    const existing = get().notes.find((n) => n.relativePath === relPath);
+
+    if (!existing) {
+      if (!isMeaningfulBody(body)) return;
+      try {
+        const relativePath = await vaultCreateDailyNote({
+          date: dateKey,
+          contents: body,
+        });
+        const markdown = await vaultReadNote(relativePath);
+        const note = buildNoteFromFile(
+          { relativePath, kind: "daily", mtimeMs: Date.now(), size: markdown.length },
+          markdown,
+        );
+        if (!note) return;
+        set((state) => ({
+          notes: [note, ...state.notes].sort((a, b) => b.modified.localeCompare(a.modified)),
+        }));
+      } catch (err) {
+        set({ lastError: err instanceof Error ? err.message : String(err) });
+      }
+      return;
+    }
+
+    await get().saveNoteBody(existing.id, body);
+  },
+
+  toggleTaskStatus: async (noteId, taskId, status) => {
+    const note = get().notes.find((n) => n.id === noteId);
+    if (!note) return;
+    const nextBody = toggleTaskStatusWithRecurrence(note.body, taskId, status);
+    await get().saveNoteBody(noteId, nextBody);
+  },
+
+  updateTaskMeta: async (noteId, taskId, patch) => {
+    const note = get().notes.find((n) => n.id === noteId);
+    if (!note) return;
+    const nextBody = updateTaskMetadata(note.body, taskId, patch);
+    await get().saveNoteBody(noteId, nextBody);
+  },
+
+  updateTaskTitle: async (noteId, taskId, title) => {
+    const note = get().notes.find((n) => n.id === noteId);
+    if (!note) return;
+    const nextBody = updateTaskTitle(note.body, taskId, title);
+    await get().saveNoteBody(noteId, nextBody);
+  },
+
+  updateTaskOrderBatch: async (items) => {
+    const notes = get().notes;
+    const grouped = new Map<NoteId, { taskId: string; order: number }[]>();
+    for (const item of items) {
+      if (!grouped.has(item.noteId)) grouped.set(item.noteId, []);
+      grouped.get(item.noteId)!.push({ taskId: item.taskId, order: item.order });
+    }
+
+    for (const [noteId, updates] of grouped.entries()) {
+      const note = notes.find((n) => n.id === noteId);
+      if (!note) continue;
+      let nextBody = note.body;
+      for (const update of updates) {
+        nextBody = updateTaskMetadata(nextBody, update.taskId, { order: update.order });
+      }
+      await get().saveNoteBody(noteId, nextBody);
+    }
+  },
+
+  createTaskNote: async ({ title, due, priority, every, projectId }) => {
+    const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`;
+    const now = nowIso();
+    const projects = projectId ? [projectId] : [];
+    const task = buildTaskLine(title, {
+      id,
+      due: due ?? undefined,
+      priority: priority ?? undefined,
+      every: every ?? undefined,
+      done: false,
+    });
+
+    const frontmatter = {
+      id,
+      created: now,
+      modified: now,
+      projects,
+      topics: [],
+      user_placed: false,
+    } as Record<string, unknown>;
+
+    const body = `${task.line}\n`;
+    const contents = stringifyNoteFile(frontmatter, body);
+
+    try {
+      const relativePath = await vaultCreateNoteFromMarkdown({
+        id,
+        targetDir: "notes/inbox",
+        titleHint: title,
+        contents,
+      });
+
+      const note: Note = {
+        id,
+        relativePath,
+        kind: noteKindFromRelativePath(relativePath),
+        title: getTitleFromBody(body),
+        created: now,
+        modified: now,
+        projects,
+        topics: [],
+        userPlaced: false,
+        body,
+        searchText: normalizeStringForSearch([getTitleFromBody(body), body].join("\n")),
+        rawFrontmatter: frontmatter,
+      };
+
+      set((state) => ({
+        notes: [note, ...state.notes].sort((a, b) => b.modified.localeCompare(a.modified)),
+      }));
     } catch (err) {
       set({ lastError: err instanceof Error ? err.message : String(err) });
     }

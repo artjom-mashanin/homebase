@@ -42,6 +42,8 @@ export type Project = {
 };
 
 export type Collection =
+  | { type: "daily" }
+  | { type: "tasks" }
   | { type: "inbox" }
   | { type: "all" }
   | { type: "folder"; folderRelativePath: string }

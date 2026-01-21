@@ -38,6 +38,7 @@ fn ensure_vault_structure(vault_root: &Path) -> Result<(), String> {
     let dirs_to_create = [
         vault_root.join("notes/inbox"),
         vault_root.join("notes/archive"),
+        vault_root.join("notes/daily"),
         vault_root.join("notes/folders"),
         vault_root.join("notes/projects"),
         vault_root.join("assets"),
@@ -132,6 +133,9 @@ fn kind_from_relative_path(relative_path: &str) -> String {
     }
     if relative_path.starts_with("notes/archive/") {
         return "archive".to_string();
+    }
+    if relative_path.starts_with("notes/daily/") {
+        return "daily".to_string();
     }
     if relative_path.starts_with("notes/projects/") {
         return "project".to_string();
@@ -245,10 +249,11 @@ pub fn vault_create_note_from_markdown(args: CreateNoteFromMarkdownArgs) -> Resu
     let target_dir_rel = validate_relative_path(&target_dir)?;
     let target_dir_str = path_to_forward_slashes(&target_dir_rel);
     if !target_dir_str.starts_with("notes/inbox")
+        && !target_dir_str.starts_with("notes/daily")
         && !target_dir_str.starts_with("notes/folders")
         && !target_dir_str.starts_with("notes/projects")
     {
-        return Err("Target directory must be under notes/inbox, notes/folders, or notes/projects"
+        return Err("Target directory must be under notes/inbox, notes/daily, notes/folders, or notes/projects"
             .to_string());
     }
 
@@ -277,10 +282,11 @@ pub fn vault_create_note(target_dir: Option<String>) -> Result<CreateNoteResult,
     let target_dir_rel = validate_relative_path(&target_dir)?;
     let target_dir_str = path_to_forward_slashes(&target_dir_rel);
     if !target_dir_str.starts_with("notes/inbox")
+        && !target_dir_str.starts_with("notes/daily")
         && !target_dir_str.starts_with("notes/folders")
         && !target_dir_str.starts_with("notes/projects")
     {
-        return Err("Target directory must be under notes/inbox, notes/folders, or notes/projects"
+        return Err("Target directory must be under notes/inbox, notes/daily, notes/folders, or notes/projects"
             .to_string());
     }
 
@@ -305,6 +311,49 @@ pub fn vault_create_note(target_dir: Option<String>) -> Result<CreateNoteResult,
 #[tauri::command]
 pub fn vault_create_note_in_inbox() -> Result<CreateNoteResult, String> {
     vault_create_note(None)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateDailyNoteArgs {
+    pub date: String,
+    pub contents: Option<String>,
+}
+
+#[tauri::command]
+pub fn vault_create_daily_note(args: CreateDailyNoteArgs) -> Result<String, String> {
+    let vault_root = homebase_vault_root()?;
+    ensure_vault_structure(&vault_root)?;
+
+    let date = args.date.trim();
+    if date.len() != 10 || date.chars().nth(4) != Some('-') || date.chars().nth(7) != Some('-') {
+        return Err("Date must be in YYYY-MM-DD format".to_string());
+    }
+    if !date
+        .chars()
+        .filter(|c| *c != '-')
+        .all(|c| c.is_ascii_digit())
+    {
+        return Err("Date must be in YYYY-MM-DD format".to_string());
+    }
+
+    let rel_path = format!("notes/daily/{}.md", date);
+    let full_path = vault_root.join(&rel_path);
+    if full_path.exists() {
+        return Ok(rel_path);
+    }
+
+    let now_iso = Utc::now().to_rfc3339();
+    let id = format!("daily-{}", date);
+    let body = args.contents.unwrap_or_default();
+
+    let contents = format!(
+        "---\nid: {}\ncreated: {}\nmodified: {}\nprojects: []\ntopics: []\nuser_placed: true\ndaily_date: {}\n---\n\n{}",
+        id, now_iso, now_iso, date, body
+    );
+
+    write_atomic(&full_path, &contents)?;
+    Ok(rel_path)
 }
 
 #[tauri::command]
@@ -353,12 +402,14 @@ pub fn vault_move_note(relative_path: String, target_dir: String) -> Result<Stri
     let target_dir_str = path_to_forward_slashes(&target_dir_rel);
     if !target_dir_str.starts_with("notes/inbox/")
         && target_dir_str != "notes/inbox"
+        && !target_dir_str.starts_with("notes/daily/")
+        && target_dir_str != "notes/daily"
         && !target_dir_str.starts_with("notes/folders/")
         && target_dir_str != "notes/folders"
         && !target_dir_str.starts_with("notes/projects/")
         && target_dir_str != "notes/projects"
     {
-        return Err("Target directory must be under notes/inbox, notes/folders, or notes/projects"
+        return Err("Target directory must be under notes/inbox, notes/daily, notes/folders, or notes/projects"
             .to_string());
     }
 

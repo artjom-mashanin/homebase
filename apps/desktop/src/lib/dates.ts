@@ -40,6 +40,24 @@ export function formatDateTime(isoString: string): string {
   });
 }
 
+export function formatLongDate(isoStringOrDate: string | Date): string {
+  const date = typeof isoStringOrDate === "string" ? new Date(isoStringOrDate) : isoStringOrDate;
+  return date.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+export function toLocalDateKey(input: string | Date): string {
+  const date = typeof input === "string" ? new Date(input) : input;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 /**
  * Format a date string to a relative datetime like "Today at 2:30 PM"
  */
@@ -93,6 +111,11 @@ export function extractSnippet(content: string, maxLength: number = 80): string 
     .replace(/^[-*+]\s+/gm, '')        // list items
     .replace(/^\d+\.\s+/gm, '')        // numbered lists
     .replace(/^>\s+/gm, '')            // blockquotes
+    .replace(/#task:[a-zA-Z0-9_-]+/g, '') // task ids
+    .replace(/@due(?:\(|:)\d{4}-\d{2}-\d{2}\)?/g, '') // due metadata
+    .replace(/@priority(?:\(|:)(low|medium|high|urgent)\)?/gi, '') // priority metadata
+    .replace(/@every(?:\(|:)(daily|weekly|monthly)\)?/gi, '') // recurrence metadata
+    .replace(/@order(?:\(|:)\d+\)?/g, '') // order metadata
     .replace(/\n+/g, ' ')              // newlines to spaces
     .trim();
 

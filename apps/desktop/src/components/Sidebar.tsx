@@ -15,6 +15,8 @@ import {
   ArchiveIcon,
   ArchiveRestore,
   FolderOpen,
+  Calendar,
+  CheckSquare,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -41,6 +43,8 @@ import {
 
 import { useHomebaseStore } from "../store/useHomebaseStore";
 import type { Collection, Project } from "../lib/types";
+import { parseTasksFromMarkdown } from "../lib/tasks";
+import { toLocalDateKey } from "../lib/dates";
 
 type FolderNode = {
   name: string;
@@ -235,10 +239,21 @@ export function Sidebar() {
   const renameFolder = useHomebaseStore((s) => s.renameFolder);
   const deleteFolder = useHomebaseStore((s) => s.deleteFolder);
   const projects = useHomebaseStore((s) => s.projects);
+  const notes = useHomebaseStore((s) => s.notes);
   const createProject = useHomebaseStore((s) => s.createProject);
   const updateProject = useHomebaseStore((s) => s.updateProject);
 
   const folderTree = useMemo(() => buildFolderTree(folders), [folders]);
+
+  const taskCounts = useMemo(() => {
+    const todayKey = toLocalDateKey(new Date());
+    const tasks = notes
+      .filter((n) => n.kind !== "archive")
+      .flatMap((note) => parseTasksFromMarkdown(note.body));
+    const dueToday = tasks.filter((t) => t.status === "todo" && t.due === todayKey).length;
+    const overdue = tasks.filter((t) => t.status === "todo" && t.due && t.due < todayKey).length;
+    return { dueToday, overdue };
+  }, [notes]);
 
   // Inline creation states
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -302,6 +317,12 @@ export function Sidebar() {
       {/* Navigation */}
       <div className="px-3 space-y-1">
         <DroppableNavButton
+          label="Daily"
+          icon={Calendar}
+          active={isCollectionActive(collection, { type: "daily" })}
+          onClick={() => setCollection({ type: "daily" })}
+        />
+        <DroppableNavButton
           label="Inbox"
           icon={Inbox}
           active={isCollectionActive(collection, { type: "inbox" })}
@@ -313,6 +334,12 @@ export function Sidebar() {
           icon={FileText}
           active={isCollectionActive(collection, { type: "all" })}
           onClick={() => setCollection({ type: "all" })}
+        />
+        <DroppableNavButton
+          label={`Tasks${taskCounts.dueToday || taskCounts.overdue ? ` (${taskCounts.dueToday}/${taskCounts.overdue})` : ""}`}
+          icon={CheckSquare}
+          active={isCollectionActive(collection, { type: "tasks" })}
+          onClick={() => setCollection({ type: "tasks" })}
         />
         <DroppableNavButton
           label="Archive"

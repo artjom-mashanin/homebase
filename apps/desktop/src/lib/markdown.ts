@@ -52,6 +52,11 @@ function stripLeadingMarkdown(line: string): string {
   out = out.replace(/^[-*+]\s+\[[ xX]\]\s*/, "");
   out = out.replace(/^[-*+]\s+/, "");
   out = out.replace(/^\d+\.\s+/, "");
+  out = out.replace(/#task:[a-zA-Z0-9_-]+/g, "");
+  out = out.replace(/@due(?:\(|:)\d{4}-\d{2}-\d{2}\)?/g, "");
+  out = out.replace(/@priority(?:\(|:)(low|medium|high|urgent)\)?/gi, "");
+  out = out.replace(/@every(?:\(|:)(daily|weekly|monthly)\)?/gi, "");
+  out = out.replace(/@order(?:\(|:)\d+\)?/gi, "");
   out = out.replace(/[`*_~]/g, "");
   return out.trim();
 }

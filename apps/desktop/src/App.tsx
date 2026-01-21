@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 import { Sidebar } from "./components/Sidebar";
 import { NoteList } from "./components/NoteList";
 import { NoteEditor } from "./components/NoteEditor";
 import { useHomebaseStore } from "./store/useHomebaseStore";
 import { formatRelativeDate, extractSnippet } from "./lib/dates";
+import { DailyView } from "./components/DailyView";
+import { TasksView } from "./components/TasksView";
 
 function App() {
   const init = useHomebaseStore((s) => s.init);
@@ -18,6 +21,9 @@ function App() {
   const moveNote = useHomebaseStore((s) => s.moveNote);
   const archiveNote = useHomebaseStore((s) => s.archiveNote);
   const updateNoteMeta = useHomebaseStore((s) => s.updateNoteMeta);
+  const collection = useHomebaseStore((s) => s.collection);
+  const selectNote = useHomebaseStore((s) => s.selectNote);
+  const createNote = useHomebaseStore((s) => s.createNote);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -88,6 +94,21 @@ function App() {
 
   const onDragCancel = useCallback(() => setActiveNoteId(null), []);
 
+  const [overlayNoteId, setOverlayNoteId] = useState<string | null>(null);
+
+  const openOverlayNote = useCallback(
+    (noteId: string) => {
+      setOverlayNoteId(noteId);
+      selectNote(noteId);
+    },
+    [selectNote],
+  );
+
+  const openNewNoteOverlay = useCallback(() => {
+    const noteId = createNote();
+    setOverlayNoteId(noteId);
+  }, [createNote]);
+
   useEffect(() => {
     void init();
   }, [init]);
@@ -107,8 +128,16 @@ function App() {
         >
           <div className="flex h-full min-h-0 min-w-0 overflow-hidden">
             <Sidebar />
-            <NoteList />
-            <NoteEditor />
+            {collection.type === "daily" ? (
+              <DailyView onOpenNote={openOverlayNote} onNewNote={openNewNoteOverlay} />
+            ) : collection.type === "tasks" ? (
+              <TasksView onOpenNote={openOverlayNote} />
+            ) : (
+              <>
+                <NoteList />
+                <NoteEditor />
+              </>
+            )}
           </div>
 
           <DragOverlay>
@@ -125,6 +154,17 @@ function App() {
             ) : null}
           </DragOverlay>
         </DndContext>
+      )}
+
+      {(collection.type === "daily" || collection.type === "tasks") && (
+        <Dialog
+          open={!!overlayNoteId}
+          onOpenChange={(open) => !open && setOverlayNoteId(null)}
+        >
+          <DialogContent className="max-w-4xl h-[80vh] p-0">
+            <NoteEditor />
+          </DialogContent>
+        </Dialog>
       )}
 
       {lastError ? (

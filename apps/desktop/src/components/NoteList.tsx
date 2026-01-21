@@ -64,10 +64,11 @@ export function NoteList() {
   const projects = useHomebaseStore((s) => s.projects);
 
   const visibleNotes = useMemo(() => {
+    const nonArchive = notes.filter((n) => n.kind !== "archive");
     const base =
       collection.type === "archive"
         ? notes.filter((n) => n.kind === "archive")
-        : notes.filter((n) => n.kind !== "archive");
+        : nonArchive.filter((n) => n.kind !== "daily");
 
     if (collection.type === "inbox") return base.filter((n) => n.kind === "inbox");
     if (collection.type === "all") return base;
@@ -80,8 +81,8 @@ export function NoteList() {
     }
     if (collection.type === "search") {
       const q = normalizeStringForSearch(searchQuery);
-      if (!q) return base;
-      return base.filter((n) => n.searchText.includes(q));
+      if (!q) return nonArchive;
+      return nonArchive.filter((n) => n.searchText.includes(q));
     }
     return base;
   }, [collection, notes, projects, searchQuery]);
@@ -290,7 +291,7 @@ function DraggableNoteCard({
       )}
     >
       <NoteCard
-        title={note.title || "Untitled"}
+        title={note.title || "New note"}
         snippet={snippet}
         date={relativeDate}
         projectBadges={projectBadges}

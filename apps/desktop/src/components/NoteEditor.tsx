@@ -1,12 +1,5 @@
 import { EditorContent, useEditor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
-import Link from "@tiptap/extension-link";
-import Placeholder from "@tiptap/extension-placeholder";
-import TaskItem from "@tiptap/extension-task-item";
-import TaskList from "@tiptap/extension-task-list";
-import Image from "@tiptap/extension-image";
-import StarterKit from "@tiptap/starter-kit";
-import { Markdown } from "tiptap-markdown";
 import { useEffect, useMemo, useState } from "react";
 import {
   Bold,
@@ -36,6 +29,12 @@ import { Input } from "@/components/ui/input";
 import { MetadataPanel } from "./MetadataPanel";
 import { useHomebaseStore } from "../store/useHomebaseStore";
 import { formatRelativeDateTime } from "../lib/dates";
+import { getMarkdownExtensions } from "../lib/editor";
+import {
+  canConvertCurrentTaskItem,
+  convertCurrentTaskItemToTask,
+  handleSpaceToConvertTask,
+} from "../lib/taskEditor";
 
 export function NoteEditor() {
   const notes = useHomebaseStore((s) => s.notes);
@@ -62,26 +61,15 @@ export function NoteEditor() {
   useEffect(() => setDraft(note?.note.body ?? ""), [note?.note.id]);
 
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Link.configure({ openOnClick: false }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      Image,
-      Placeholder.configure({
-        placeholder: "Start typing...",
-      }),
-      Markdown.configure({
-        html: false,
-        transformPastedText: true,
-        transformCopiedText: true,
-      }),
-    ],
+    extensions: getMarkdownExtensions("Start typing..."),
     content: draft,
     editorProps: {
       attributes: {
         class:
           "prose max-w-none focus:outline-none prose-headings:font-semibold prose-a:text-primary prose-code:text-foreground",
+      },
+      handleKeyDown: (view, event) => {
+        return handleSpaceToConvertTask(view, event);
       },
     },
     onUpdate: ({ editor }) => {
@@ -388,6 +376,12 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
           label="Task List"
           active={editor.isActive("taskList")}
           onClick={() => editor.chain().focus().toggleTaskList().run()}
+        />
+        <ToolbarButton
+          icon={CheckSquare}
+          label="Convert to Task"
+          disabled={!canConvertCurrentTaskItem(editor)}
+          onClick={() => convertCurrentTaskItemToTask(editor)}
         />
 
         <Separator orientation="vertical" className="mx-1 h-6" />
