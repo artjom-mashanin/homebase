@@ -66,7 +66,7 @@ export function NoteEditor() {
     editorProps: {
       attributes: {
         class:
-          "prose max-w-none focus:outline-none prose-headings:font-semibold prose-a:text-primary prose-code:text-foreground",
+          "prose max-w-none break-words focus:outline-none prose-headings:font-semibold prose-a:text-primary prose-code:text-foreground",
       },
       handleKeyDown: (view, event) => {
         return handleSpaceToConvertTask(view, event);
@@ -112,15 +112,15 @@ export function NoteEditor() {
     note.type === "draft" ? "Not saved" : formatRelativeDateTime(note.note.modified);
 
   return (
-    <section className="flex h-full min-h-0 flex-1 bg-background">
+    <section className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
       <div className="flex h-full min-h-0 flex-1 flex-col">
         {/* Header */}
         <PanelHeader className="gap-3">
-          <div className="min-w-0">
+          <div className="flex-1 min-w-0">
             <div className="truncate text-sm font-semibold">{note.note.title || "New note"}</div>
             <div className="mt-0.5 truncate text-xs text-muted-foreground">{formattedDate}</div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="shrink-0 flex items-center gap-2">
             <EditorToolbar editor={editor} />
             {note.type === "persisted" && (
               <>

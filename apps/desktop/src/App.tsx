@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -10,6 +10,32 @@ import { useHomebaseStore } from "./store/useHomebaseStore";
 import { formatRelativeDate, extractSnippet } from "./lib/dates";
 import { DailyView } from "./components/DailyView";
 import { TasksView } from "./components/TasksView";
+
+const LAYOUT_STORAGE_KEYS = {
+  sidebarWidth: "homebase.layout.sidebarWidth",
+  listWidth: "homebase.layout.listWidth",
+} as const;
+
+const DEFAULT_LAYOUT = {
+  sidebarWidth: 260,
+  listWidth: 360,
+  handleWidth: 6,
+  minSidebar: 220,
+  minList: 280,
+  minMain: 420,
+  maxSidebar: 420,
+  maxList: 520,
+} as const;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function readStoredNumber(key: string, fallback: number): number {
+  const raw = localStorage.getItem(key);
+  const parsed = raw ? Number(raw) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 
 function App() {
   const init = useHomebaseStore((s) => s.init);
@@ -24,6 +50,16 @@ function App() {
   const collection = useHomebaseStore((s) => s.collection);
   const selectNote = useHomebaseStore((s) => s.selectNote);
   const createNote = useHomebaseStore((s) => s.createNote);
+
+  const layoutRef = useRef<HTMLDivElement | null>(null);
+  const [layoutWidth, setLayoutWidth] = useState<number>(0);
+
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() =>
+    readStoredNumber(LAYOUT_STORAGE_KEYS.sidebarWidth, DEFAULT_LAYOUT.sidebarWidth),
+  );
+  const [listWidth, setListWidth] = useState<number>(() =>
+    readStoredNumber(LAYOUT_STORAGE_KEYS.listWidth, DEFAULT_LAYOUT.listWidth),
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -113,6 +149,91 @@ function App() {
     void init();
   }, [init]);
 
+  useEffect(() => {
+    if (!layoutRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (!rect) return;
+      setLayoutWidth(rect.width);
+    });
+    ro.observe(layoutRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const isSinglePane = collection.type === "daily" || collection.type === "tasks";
+
+  const sidebarMax = useMemo(() => {
+    if (!layoutWidth) return DEFAULT_LAYOUT.maxSidebar;
+    const handles = isSinglePane ? DEFAULT_LAYOUT.handleWidth : DEFAULT_LAYOUT.handleWidth * 2;
+    const reserved = isSinglePane ? DEFAULT_LAYOUT.minMain : DEFAULT_LAYOUT.minList + DEFAULT_LAYOUT.minMain;
+    const max = layoutWidth - handles - reserved;
+    return clamp(max, DEFAULT_LAYOUT.minSidebar, DEFAULT_LAYOUT.maxSidebar);
+  }, [isSinglePane, layoutWidth]);
+
+  const listMax = useMemo(() => {
+    if (isSinglePane) return DEFAULT_LAYOUT.maxList;
+    if (!layoutWidth) return DEFAULT_LAYOUT.maxList;
+    const handles = DEFAULT_LAYOUT.handleWidth * 2;
+    const max = layoutWidth - handles - sidebarWidth - DEFAULT_LAYOUT.minMain;
+    return clamp(max, DEFAULT_LAYOUT.minList, DEFAULT_LAYOUT.maxList);
+  }, [isSinglePane, layoutWidth, sidebarWidth]);
+
+  useEffect(() => {
+    setSidebarWidth((w) => clamp(w, DEFAULT_LAYOUT.minSidebar, sidebarMax));
+  }, [sidebarMax]);
+
+  useEffect(() => {
+    if (isSinglePane) return;
+    setListWidth((w) => clamp(w, DEFAULT_LAYOUT.minList, listMax));
+  }, [isSinglePane, listMax]);
+
+  useEffect(() => {
+    localStorage.setItem(LAYOUT_STORAGE_KEYS.sidebarWidth, String(sidebarWidth));
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    localStorage.setItem(LAYOUT_STORAGE_KEYS.listWidth, String(listWidth));
+  }, [listWidth]);
+
+  const beginResize = useCallback(
+    (
+      event: React.PointerEvent,
+      opts: {
+        axis: "sidebar" | "list";
+      },
+    ) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const startX = event.clientX;
+      const startWidth = opts.axis === "sidebar" ? sidebarWidth : listWidth;
+      const cursorBefore = document.body.style.cursor;
+      const userSelectBefore = document.body.style.userSelect;
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+
+      const onMove = (moveEvent: PointerEvent) => {
+        const delta = moveEvent.clientX - startX;
+        if (opts.axis === "sidebar") {
+          setSidebarWidth(clamp(startWidth + delta, DEFAULT_LAYOUT.minSidebar, sidebarMax));
+          return;
+        }
+        setListWidth(clamp(startWidth + delta, DEFAULT_LAYOUT.minList, listMax));
+      };
+
+      const onUp = () => {
+        document.body.style.cursor = cursorBefore;
+        document.body.style.userSelect = userSelectBefore;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    },
+    [listMax, listWidth, sidebarMax, sidebarWidth],
+  );
+
   return (
     <div className="h-full min-h-0 overflow-hidden">
       {isBooting ? (
@@ -127,17 +248,38 @@ function App() {
           onDragCancel={onDragCancel}
         >
           <div className="flex h-full min-h-0 min-w-0 overflow-hidden">
-            <Sidebar />
-            {collection.type === "daily" ? (
-              <DailyView onOpenNote={openOverlayNote} onNewNote={openNewNoteOverlay} />
-            ) : collection.type === "tasks" ? (
-              <TasksView onOpenNote={openOverlayNote} />
-            ) : (
-              <>
-                <NoteList />
-                <NoteEditor />
-              </>
-            )}
+            <div
+              ref={layoutRef}
+              className="grid h-full min-h-0 min-w-0 flex-1 overflow-hidden"
+              style={{
+                gridTemplateColumns: isSinglePane
+                  ? `${sidebarWidth}px ${DEFAULT_LAYOUT.handleWidth}px minmax(0, 1fr)`
+                  : `${sidebarWidth}px ${DEFAULT_LAYOUT.handleWidth}px ${listWidth}px ${DEFAULT_LAYOUT.handleWidth}px minmax(0, 1fr)`,
+              }}
+            >
+              <Sidebar />
+              <ColumnResizeHandle
+                ariaLabel="Resize sidebar"
+                onPointerDown={(e) => beginResize(e, { axis: "sidebar" })}
+                onDoubleClick={() => setSidebarWidth(DEFAULT_LAYOUT.sidebarWidth)}
+              />
+
+              {collection.type === "daily" ? (
+                <DailyView onOpenNote={openOverlayNote} onNewNote={openNewNoteOverlay} />
+              ) : collection.type === "tasks" ? (
+                <TasksView onOpenNote={openOverlayNote} />
+              ) : (
+                <>
+                  <NoteList />
+                  <ColumnResizeHandle
+                    ariaLabel="Resize note list"
+                    onPointerDown={(e) => beginResize(e, { axis: "list" })}
+                    onDoubleClick={() => setListWidth(DEFAULT_LAYOUT.listWidth)}
+                  />
+                  <NoteEditor />
+                </>
+              )}
+            </div>
           </div>
 
           <DragOverlay>
@@ -189,3 +331,28 @@ function App() {
 }
 
 export default App;
+
+function ColumnResizeHandle({
+  ariaLabel,
+  onPointerDown,
+  onDoubleClick,
+}: {
+  ariaLabel: string;
+  onPointerDown: (event: React.PointerEvent) => void;
+  onDoubleClick?: () => void;
+}) {
+  return (
+    <div
+      role="separator"
+      aria-label={ariaLabel}
+      aria-orientation="vertical"
+      tabIndex={0}
+      onPointerDown={onPointerDown}
+      onDoubleClick={onDoubleClick}
+      className="group relative h-full cursor-col-resize select-none bg-transparent"
+    >
+      <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border" />
+      <div className="absolute inset-y-0 left-1/2 w-1 -translate-x-1/2 bg-primary/0 group-hover:bg-primary/20 transition-colors" />
+    </div>
+  );
+}

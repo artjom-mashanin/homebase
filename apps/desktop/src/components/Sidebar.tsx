@@ -228,7 +228,7 @@ function InlineRenameInput({
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ className }: { className?: string }) {
   const vaultPath = useHomebaseStore((s) => s.vaultPath);
   const collection = useHomebaseStore((s) => s.collection);
   const setCollection = useHomebaseStore((s) => s.setCollection);
@@ -275,10 +275,15 @@ export function Sidebar() {
   } | null>(null);
 
   return (
-    <aside className="flex h-full min-h-0 w-64 flex-col border-r border-border bg-sidebar">
+    <aside
+      className={cn(
+        "flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-sidebar",
+        className,
+      )}
+    >
       {/* Header */}
       <PanelHeader>
-        <div className="min-w-0">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 text-sm font-semibold leading-none">
             <div className="flex size-5 items-center justify-center rounded bg-primary text-[10px] font-bold text-primary-foreground">
               H
@@ -294,7 +299,7 @@ export function Sidebar() {
             if (!vaultPath) return;
             void openPath(vaultPath);
           }}
-          className="h-7 text-xs"
+          className="h-7 shrink-0 text-xs"
         >
           <FolderOpen className="size-3.5" />
           Open

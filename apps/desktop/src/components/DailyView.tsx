@@ -135,7 +135,7 @@ export function DailyView({
   };
 
   return (
-    <section className="flex h-full min-h-0 flex-1 flex-col bg-background">
+    <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background">
       <PanelHeader className="gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-semibold leading-none">
@@ -294,7 +294,7 @@ function TaskQuickList({
 }) {
   if (tasks.length === 0) return null;
   return (
-    <div className="rounded-lg border border-border/60 bg-card/40 p-3">
+    <div className="rounded-lg bg-accent/30 p-3">
       <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {title}
       </div>
@@ -304,7 +304,7 @@ function TaskQuickList({
             key={task.id}
             type="button"
             onClick={() => onOpenNote(task.noteId)}
-            className="flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-sm hover:bg-accent/40"
+            className="flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-sm hover:bg-accent/60 transition-colors"
           >
             <span className="truncate">{task.title}</span>
             <ArrowUpRight className="size-4 text-muted-foreground" />
@@ -391,15 +391,15 @@ function AttachmentSection({
         <ClipboardList className="size-3.5" />
         {title}
       </div>
-      <div className="grid gap-2">
+      <div className="grid gap-1">
         {notes.map((note) => (
           <button
             key={note.id}
             type="button"
             onClick={() => onOpenNote(note.id)}
-            className="flex items-center justify-between rounded-lg border border-border/60 bg-card/40 px-3 py-2 text-left text-sm hover:bg-accent/50 transition-colors"
+            className="flex items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-accent/40 transition-colors"
           >
-            <span className="truncate font-medium">
+            <span className="min-w-0 truncate font-medium">
               {note.title || "New note"}
             </span>
             <ArrowUpRight className="size-4 text-muted-foreground" />

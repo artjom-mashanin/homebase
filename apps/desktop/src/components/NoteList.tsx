@@ -52,7 +52,7 @@ function getCollectionDisplay(collection: Collection, projects: Project[]): {
   }
 }
 
-export function NoteList() {
+export function NoteList({ className }: { className?: string }) {
   const notes = useHomebaseStore((s) => s.notes);
   const draftNote = useHomebaseStore((s) => s.draftNote);
   const selectedNoteId = useHomebaseStore((s) => s.selectedNoteId);
@@ -107,10 +107,15 @@ export function NoteList() {
   );
 
   return (
-    <section className="flex h-full min-h-0 w-80 flex-col border-r border-border bg-background">
+    <section
+      className={cn(
+        "flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-background",
+        className,
+      )}
+    >
       {/* Header */}
       <PanelHeader>
-        <div>
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 text-sm font-semibold leading-none">
             <CollectionIcon className="size-4 text-muted-foreground" />
             {collectionLabel}
@@ -137,7 +142,7 @@ export function NoteList() {
         {visibleNotes.length === 0 && !showDraft ? (
           <div className="p-4 text-sm text-muted-foreground">No notes.</div>
         ) : (
-          <div className="p-2 space-y-1">
+          <div className="w-full min-w-0 p-2 space-y-1">
             {showDraft && draftNote ? (
               <NoteCard
                 key={draftNote.id}
@@ -195,15 +200,15 @@ function NoteCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "group relative w-full rounded-lg border p-3 text-left transition-all",
+        "group relative w-full overflow-hidden rounded-lg border p-3 text-left transition-all",
         selected
           ? "border-primary/50 bg-accent shadow-sm"
           : "border-transparent hover:border-border hover:bg-accent/50",
       )}
     >
       {/* Title */}
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="truncate text-sm font-medium text-foreground">{title}</h3>
+      <div className="flex min-w-0 items-start justify-between gap-2">
+        <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{title}</h3>
         {!isArchived && !isDraft && (
           <button
             type="button"

@@ -5,12 +5,12 @@ import {
   ClipboardList,
   Flame,
   CalendarDays,
-  Circle,
   Plus,
   GripVertical,
   MoreHorizontal,
   Calendar,
   Flag,
+  Check,
 } from "lucide-react";
 import {
   DndContext,
@@ -84,7 +84,7 @@ export function TasksView({ onOpenNote }: { onOpenNote: (noteId: string) => void
   const [newDue, setNewDue] = useState("");
   const [newPriority, setNewPriority] = useState<TaskPriority | "">("");
   const [newEvery, setNewEvery] = useState<TaskRecurrence | "">("");
-  const [quickAddDetailsOpen, setQuickAddDetailsOpen] = useState(false);
+  const [quickAddExpanded, setQuickAddExpanded] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
 
@@ -251,9 +251,9 @@ export function TasksView({ onOpenNote }: { onOpenNote: (noteId: string) => void
   );
 
   return (
-    <section className="flex h-full min-h-0 flex-1 flex-col bg-background">
+    <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
       <PanelHeader className="gap-3">
-        <div className="min-w-0">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 text-sm font-semibold leading-none">
             <ClipboardList className="size-4 text-muted-foreground" />
             Tasks
@@ -262,7 +262,7 @@ export function TasksView({ onOpenNote }: { onOpenNote: (noteId: string) => void
             {filteredTasks.length} {filteredTasks.length === 1 ? "task" : "tasks"}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="shrink-0 flex items-center gap-2">
           <Badge variant="secondary" className="gap-1">
             <CalendarDays className="size-3.5" />
             {dueTodayCount} due today
@@ -331,22 +331,24 @@ export function TasksView({ onOpenNote }: { onOpenNote: (noteId: string) => void
           inputRef={inputRef}
           value={newTitle}
           onChange={setNewTitle}
-          onSubmit={handleAddTask}
-          onClear={() => {
+          onSubmit={() => {
+            handleAddTask();
+            setQuickAddExpanded(false);
+          }}
+          onCancel={() => {
             setNewTitle("");
             setNewDue("");
             setNewPriority("");
             setNewEvery("");
+            setQuickAddExpanded(false);
           }}
           parsed={parseTaskInput(newTitle, projects)}
-          detailsOpen={quickAddDetailsOpen}
-          onToggleDetails={() => setQuickAddDetailsOpen((v) => !v)}
+          expanded={quickAddExpanded}
+          onExpand={() => setQuickAddExpanded(true)}
           manualDue={newDue}
           onManualDueChange={setNewDue}
           manualPriority={newPriority}
           onManualPriorityChange={setNewPriority}
-          manualEvery={newEvery}
-          onManualEveryChange={setNewEvery}
         />
       </div>
 
@@ -355,16 +357,16 @@ export function TasksView({ onOpenNote }: { onOpenNote: (noteId: string) => void
           <div className="p-6 text-sm text-muted-foreground">No tasks yet.</div>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <div className="p-4 space-y-5">
+            <div className="w-full min-w-0 p-4 space-y-5">
               {groupedTasks.map((group) => (
-                <div key={group.id} className="space-y-2">
+                <div key={group.id} className="min-w-0 space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="text-xs font-semibold tracking-wide text-muted-foreground">
                       {group.label}
                     </div>
                     <div className="text-xs text-muted-foreground">{group.tasks.length}</div>
                   </div>
-                  <div className="overflow-hidden rounded-lg border border-border bg-card/30">
+                  <div className="w-full min-w-0 overflow-hidden rounded-lg border border-border bg-card/30 divide-y divide-border">
                     {group.tasks.map((task) => (
                       <DraggableTaskRow
                         key={`${task.noteId}-${task.id}`}
@@ -436,127 +438,166 @@ function QuickAddRow({
   value,
   onChange,
   onSubmit,
-  onClear,
+  onCancel,
   parsed,
-  detailsOpen,
-  onToggleDetails,
+  expanded,
+  onExpand,
   manualDue,
   onManualDueChange,
   manualPriority,
   onManualPriorityChange,
-  manualEvery,
-  onManualEveryChange,
 }: {
   inputRef: RefObject<HTMLInputElement | null>;
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
-  onClear: () => void;
+  onCancel: () => void;
   parsed: ReturnType<typeof parseTaskInput>;
-  detailsOpen: boolean;
-  onToggleDetails: () => void;
+  expanded: boolean;
+  onExpand: () => void;
   manualDue: string;
   onManualDueChange: (value: string) => void;
   manualPriority: TaskPriority | "";
   onManualPriorityChange: (value: TaskPriority | "") => void;
-  manualEvery: TaskRecurrence | "";
-  onManualEveryChange: (value: TaskRecurrence | "") => void;
 }) {
   const chips: Array<{ label: string; icon?: ReactNode }> = [];
-  if (parsed.due) chips.push({ label: parsed.due, icon: <Calendar className="size-3.5" /> });
-  if (parsed.priority) chips.push({ label: parsed.priority.toUpperCase(), icon: <Flag className="size-3.5" /> });
-  if (parsed.every) chips.push({ label: parsed.every, icon: <CalendarDays className="size-3.5" /> });
+  if (parsed.due || manualDue) chips.push({ label: parsed.due || manualDue, icon: <Calendar className="size-3" /> });
+  if (parsed.priority || manualPriority) chips.push({ label: (parsed.priority || manualPriority).toUpperCase(), icon: <Flag className="size-3" /> });
+  if (parsed.every) chips.push({ label: parsed.every, icon: <CalendarDays className="size-3" /> });
 
+  // Collapsed state: simple "+ Add task" button
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          onExpand();
+          requestAnimationFrame(() => inputRef.current?.focus());
+        }}
+        className="flex items-center gap-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <Plus className="size-4" />
+        <span>Add task</span>
+      </button>
+    );
+  }
+
+  // Expanded state: card with input, chips, and actions
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <div className="flex h-10 flex-1 items-center gap-2 rounded-lg border border-border bg-background px-3 focus-within:ring-2 focus-within:ring-primary/20">
-          <Plus className="size-4 text-muted-foreground" />
-          <input
-            ref={inputRef}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder="Add a task… (try: tomorrow p2 #project every week)"
-            className="h-10 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                onSubmit();
-              }
-              if (e.key === "Escape") {
-                e.preventDefault();
-                onClear();
-              }
-            }}
-          />
-          <Button size="sm" onClick={onSubmit} className="h-8" disabled={!value.trim()}>
-            Add
-          </Button>
-          <Button size="sm" variant="ghost" onClick={onToggleDetails} className="h-8">
-            Details
-          </Button>
-        </div>
+    <div className="rounded-lg border border-border bg-card/50 overflow-hidden">
+      {/* Input area */}
+      <div className="px-3 py-2">
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Task name"
+          className="w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && value.trim()) {
+              e.preventDefault();
+              onSubmit();
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              onCancel();
+            }
+          }}
+          autoFocus
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Try: tomorrow p2 #project every week
+        </p>
       </div>
 
-      {(detailsOpen || chips.length > 0) && (
-        <div className="flex flex-wrap items-center gap-2">
+      {/* Parsed chips */}
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-border/50 px-3 py-2">
           {chips.map((chip) => (
-            <Badge key={chip.label} variant="secondary" className="gap-1 rounded-full">
+            <Badge key={chip.label} variant="secondary" className="gap-1 rounded-full text-xs py-0.5">
               {chip.icon}
               {chip.label}
             </Badge>
           ))}
+        </div>
+      )}
 
-          {detailsOpen && (
-            <div className="flex flex-wrap items-center gap-2">
+      {/* Action row */}
+      <div className="flex flex-wrap items-center gap-2 border-t border-border/50 px-3 py-2 bg-muted/30">
+        <div className="flex items-center gap-1">
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors",
+                  manualDue && "text-primary",
+                )}
+                title="Set due date"
+              >
+                <Calendar className="size-4" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-2" align="start">
               <Input
                 type="date"
                 value={manualDue}
                 onChange={(e) => onManualDueChange(e.target.value)}
-                className="h-8 w-[150px]"
+                className="h-8"
               />
-              <Select
-                value={manualPriority || "none"}
-                onValueChange={(v) =>
-                  onManualPriorityChange(v === "none" ? "" : (v as TaskPriority))
-                }
+            </PopoverContent>
+          </Popover>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors",
+                  manualPriority && "text-primary",
+                )}
+                title="Set priority"
               >
-                <SelectTrigger className="h-8 w-[140px]">
-                  <SelectValue placeholder="Priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No priority</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={manualEvery || "none"}
-                onValueChange={(v) =>
-                  onManualEveryChange(v === "none" ? "" : (v as TaskRecurrence))
-                }
-              >
-                <SelectTrigger className="h-8 w-[140px]">
-                  <SelectValue placeholder="Repeat" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No repeat</SelectItem>
-                  <SelectItem value="daily">Daily</SelectItem>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          <div className="ml-auto text-xs text-muted-foreground">
-            Press <kbd className="rounded border border-border bg-muted px-1 py-0.5">/</kbd> or{" "}
-            <kbd className="rounded border border-border bg-muted px-1 py-0.5">⌘K</kbd> to focus
-          </div>
+                <Flag className="size-4" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-32 p-1" align="start">
+              <div className="space-y-0.5">
+                {(["urgent", "high", "medium", "low"] as TaskPriority[]).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => onManualPriorityChange(p)}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent",
+                      manualPriority === p && "bg-accent",
+                    )}
+                  >
+                    <span className={cn("size-2 rounded-full", priorityDotClass(p))} />
+                    {p.charAt(0).toUpperCase() + p.slice(1)}
+                  </button>
+                ))}
+                {manualPriority && (
+                  <button
+                    type="button"
+                    onClick={() => onManualPriorityChange("")}
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
-      )}
+        <div className="ml-auto flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={onCancel} className="h-7 px-2 text-xs">
+            Cancel
+          </Button>
+          <Button size="sm" onClick={onSubmit} className="h-7 px-3 text-xs" disabled={!value.trim()}>
+            Add task
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -598,6 +639,8 @@ function DraggableTaskRow({
     transform: CSS.Translate.toString(transform),
   };
 
+  const isOverdue = Boolean(task.due && task.due < todayKey);
+
   return (
     <div
       ref={(node) => {
@@ -606,8 +649,8 @@ function DraggableTaskRow({
       }}
       style={style}
       className={cn(
-        "group flex items-center gap-2 px-3 py-2",
-        "border-b border-border last:border-b-0",
+        "group flex w-full min-w-0 items-center gap-2 overflow-hidden px-2 py-2 transition-colors",
+        "hover:bg-accent/50",
         isOver && "bg-primary/5",
         isDragging && "opacity-70",
       )}
@@ -615,8 +658,8 @@ function DraggableTaskRow({
       <button
         type="button"
         className={cn(
-          "rounded p-1 text-muted-foreground hover:text-foreground",
-          "opacity-0 group-hover:opacity-100 focus:opacity-100",
+          "shrink-0 rounded p-0.5 text-muted-foreground/50 hover:text-muted-foreground",
+          "opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity",
         )}
         {...attributes}
         {...listeners}
@@ -629,16 +672,14 @@ function DraggableTaskRow({
         type="button"
         onClick={() => onToggle(task.status === "done" ? "todo" : "done")}
         className={cn(
-          "rounded-full border p-1",
-          task.status === "done" ? "border-primary bg-primary/10" : "border-border",
+          "shrink-0 flex items-center justify-center size-[18px] rounded-full border-2 transition-colors",
+          task.status === "done"
+            ? "border-primary bg-primary"
+            : "border-muted-foreground/30 hover:border-primary/60",
         )}
         aria-label={task.status === "done" ? "Mark as todo" : "Mark as done"}
       >
-        {task.status === "done" ? (
-          <CheckSquare className="size-4 text-primary" />
-        ) : (
-          <Circle className="size-4 text-muted-foreground" />
-        )}
+        {task.status === "done" && <Check className="size-3 text-primary-foreground" strokeWidth={3} />}
       </button>
 
       <div className="min-w-0 flex-1">
@@ -657,7 +698,7 @@ function DraggableTaskRow({
               }
             }}
             onBlur={onCommitEdit}
-            className="h-8 text-sm"
+            className="h-8 min-w-0 text-sm"
             autoFocus
           />
         ) : (
@@ -665,7 +706,7 @@ function DraggableTaskRow({
             type="button"
             onClick={onStartEdit}
             className={cn(
-              "w-full truncate text-left text-sm",
+              "block w-full min-w-0 truncate text-left text-sm",
               task.status === "done" ? "text-muted-foreground line-through" : "text-foreground",
             )}
             title={task.title}
@@ -678,7 +719,7 @@ function DraggableTaskRow({
           type="button"
           onClick={onOpenNote}
           className={cn(
-            "mt-0.5 block max-w-full truncate text-xs text-muted-foreground hover:text-foreground",
+            "mt-0.5 block min-w-0 truncate text-xs text-muted-foreground hover:text-foreground",
             "opacity-0 group-hover:opacity-100",
           )}
           title={task.noteTitle}
@@ -687,7 +728,7 @@ function DraggableTaskRow({
         </button>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         {task.priority ? (
           <span
             className={cn("size-2 rounded-full", priorityDotClass(task.priority))}
@@ -702,20 +743,24 @@ function DraggableTaskRow({
         ) : null}
 
         {task.due ? (
-          <DuePicker due={task.due} onChange={(next) => onUpdateMeta({ due: next })} />
+          <DuePicker
+            due={task.due}
+            isOverdue={isOverdue}
+            onChange={(next) => onUpdateMeta({ due: next })}
+          />
         ) : (
-          <Badge
-            variant="outline"
+          <button
+            type="button"
             className={cn(
-              "hidden cursor-pointer select-none rounded-full text-muted-foreground sm:inline-flex",
-              "opacity-0 group-hover:opacity-100",
+              "hidden items-center gap-1 text-xs text-muted-foreground hover:text-foreground sm:flex",
+              "opacity-0 group-hover:opacity-100 transition-opacity",
             )}
             onClick={() => onUpdateMeta({ due: todayKey })}
             title="Set due today"
           >
-            <Calendar className="mr-1 size-3.5" />
-            Due
-          </Badge>
+            <Calendar className="size-3.5" />
+            <span>Due</span>
+          </button>
         )}
 
         <DropdownMenu>
@@ -724,7 +769,7 @@ function DraggableTaskRow({
               type="button"
               className={cn(
                 "rounded p-1 text-muted-foreground hover:text-foreground",
-                "opacity-0 group-hover:opacity-100 focus:opacity-100",
+                "opacity-60 hover:opacity-100 focus:opacity-100 transition-opacity",
               )}
               aria-label="Task actions"
             >
@@ -801,19 +846,29 @@ function DraggableTaskRow({
 
 function DuePicker({
   due,
+  isOverdue,
   onChange,
 }: {
   due: string;
+  isOverdue?: boolean;
   onChange: (next: string | null) => void;
 }) {
   const label = formatDateKeyLabel(due);
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Badge variant="secondary" className="cursor-pointer select-none rounded-full">
-          <Calendar className="mr-1 size-3.5" />
-          {label}
-        </Badge>
+        <button
+          type="button"
+          className={cn(
+            "flex items-center gap-1 text-xs transition-colors",
+            isOverdue
+              ? "text-destructive hover:text-destructive/80"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Calendar className="size-3.5" />
+          <span>{label}</span>
+        </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-3">
         <div className="space-y-3">
